@@ -21,7 +21,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -52,6 +51,7 @@ fun AlphabetScroller(
     if (letters.isEmpty()) return
 
     val haptics = LocalHapticFeedback.current
+    val style = LocalLauncherStyle.current
     val shiftPx = with(LocalDensity.current) { WAVE_SHIFT.toPx() }
     val currentLetters by rememberUpdatedState(letters)
     val currentOnSelected by rememberUpdatedState(onLetterSelected)
@@ -118,7 +118,7 @@ fun AlphabetScroller(
                 )
                 Text(
                     text = letter.toString(),
-                    color = if (i == selected) Color.White else Color.White.copy(alpha = 0.6f),
+                    color = if (i == selected) style.text else style.textSecondary,
                     fontSize = 11.sp,
                     fontWeight = if (i == selected) FontWeight.Bold else FontWeight.Medium,
                     modifier = Modifier

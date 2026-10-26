@@ -2,14 +2,17 @@ package com.wheremashrimps.reach.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
@@ -20,7 +23,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -70,11 +76,11 @@ fun AppRow(
                 )
                 .padding(vertical = if (large) 10.dp else 7.dp),
         ) {
-            Image(bitmap = app.icon, contentDescription = null, modifier = Modifier.size(iconSize))
+            AppIcon(app, Modifier.size(iconSize))
             Spacer(Modifier.width(16.dp))
             Text(
                 text = app.label,
-                color = Color.White,
+                color = LocalLauncherStyle.current.text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = TextStyle(fontSize = if (large) 22.sp else 17.sp, shadow = WallpaperTextShadow),
@@ -90,6 +96,39 @@ fun AppRow(
             MenuItem("Uninstall", close) { actions.onUninstall(app) }
         }
     }
+}
+
+/**
+ * The app's icon, restyled to match the theme when it asks for themed icons: the app's own
+ * one-color glyph on a dark disc, or for apps without one, their icon washed in the tint color.
+ */
+@Composable
+private fun AppIcon(app: AppInfo, modifier: Modifier) {
+    val style = LocalLauncherStyle.current
+    val mono = app.monoIcon
+    when {
+        !style.themedIcons -> Image(app.icon, contentDescription = null, modifier = modifier)
+        mono != null -> Box(
+            contentAlignment = Alignment.Center,
+            modifier = modifier
+                .clip(CircleShape)
+                .background(style.iconBackground),
+        ) {
+            Image(mono, contentDescription = null, colorFilter = ColorFilter.tint(style.iconTint), modifier = Modifier.fillMaxSize())
+        }
+        else -> {
+            val filter = remember(style.iconTint) { tintedGrayscale(style.iconTint) }
+            Image(app.icon, contentDescription = null, colorFilter = filter, modifier = modifier)
+        }
+    }
+}
+
+/** Grayscale the image by brightness, then multiply by [tint], keeping the icon's shading. */
+private fun tintedGrayscale(tint: Color): ColorFilter {
+    fun row(c: Float) = floatArrayOf(0.299f * c, 0.587f * c, 0.114f * c, 0f, 0f)
+    return ColorFilter.colorMatrix(
+        ColorMatrix(row(tint.red) + row(tint.green) + row(tint.blue) + floatArrayOf(0f, 0f, 0f, 1f, 0f)),
+    )
 }
 
 @Composable

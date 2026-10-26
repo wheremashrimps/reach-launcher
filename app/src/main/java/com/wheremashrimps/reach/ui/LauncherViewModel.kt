@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.wheremashrimps.reach.data.AppInfo
 import com.wheremashrimps.reach.data.AppRepository
 import com.wheremashrimps.reach.data.FavoritesStore
+import com.wheremashrimps.reach.data.SettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +24,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = AppRepository(app)
     private val favoritesStore = FavoritesStore(app)
+    private val settings = SettingsStore(app)
 
     private val _apps = MutableStateFlow<List<AppInfo>>(emptyList())
     val apps: StateFlow<List<AppInfo>> = _apps.asStateFlow()
@@ -40,6 +42,9 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _drawerOpen = MutableStateFlow(false)
     val drawerOpen: StateFlow<Boolean> = _drawerOpen.asStateFlow()
+
+    private val _theme = MutableStateFlow(settings.theme)
+    val theme: StateFlow<LauncherTheme> = _theme.asStateFlow()
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
@@ -103,6 +108,11 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     fun closeDrawer() {
         _drawerOpen.value = false
         _query.value = ""
+    }
+
+    fun setTheme(theme: LauncherTheme) {
+        settings.theme = theme
+        _theme.value = theme
     }
 
     fun setQuery(text: String) = _query.update { text }

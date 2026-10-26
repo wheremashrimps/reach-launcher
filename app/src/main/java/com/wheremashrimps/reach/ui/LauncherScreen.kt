@@ -1,6 +1,15 @@
 package com.wheremashrimps.reach.ui
 
 import android.text.format.DateFormat
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -71,6 +80,7 @@ fun LauncherScreen(vm: LauncherViewModel) {
     val favoriteKeys by vm.favoriteKeySet.collectAsStateWithLifecycle()
     val drawerOpen by vm.drawerOpen.collectAsStateWithLifecycle()
     val query by vm.query.collectAsStateWithLifecycle()
+    val theme by vm.theme.collectAsStateWithLifecycle()
 
     val groups = remember(apps) {
         apps.groupBy { it.letter }.toSortedMap(letterOrder)
@@ -93,44 +103,50 @@ fun LauncherScreen(vm: LauncherViewModel) {
         )
     }
 
-    Box(Modifier.fillMaxSize()) {
-        AnimatedVisibility(visible = !drawerOpen, enter = fadeIn(), exit = fadeOut()) {
-            HomePage(
-                favorites = favorites,
-                actions = actions,
-                onSwipeUp = vm::openDrawer,
-            )
-        }
+    CompositionLocalProvider(LocalLauncherStyle provides theme.style) {
+        Box(Modifier.fillMaxSize()) {
+            if (theme == LauncherTheme.DUNES) DuneBackground(Modifier.fillMaxSize())
 
-        AnimatedVisibility(
-            visible = drawerOpen,
-            enter = fadeIn() + slideInVertically { it / 8 },
-            exit = fadeOut() + slideOutVertically { it / 8 },
-        ) {
-            Drawer(
-                groups = groups,
-                apps = apps,
-                favoriteKeys = favoriteKeys,
-                query = query,
-                onQueryChange = vm::setQuery,
-                listState = listState,
-                actions = actions,
-                onSwipeDownAtTop = vm::closeDrawer,
-            )
-        }
+            AnimatedVisibility(visible = !drawerOpen, enter = fadeIn(), exit = fadeOut()) {
+                HomePage(
+                    favorites = favorites,
+                    actions = actions,
+                    onSwipeUp = vm::openDrawer,
+                    theme = theme,
+                    onThemeChange = vm::setTheme,
+                )
+            }
 
-        if (query.isEmpty()) {
-            AlphabetScroller(
-                letters = groups.keys.toList(),
-                onLetterSelected = { letter ->
-                    headerIndex[letter]?.let { scope.launch { listState.scrollToItem(it) } }
-                },
-                onActiveChange = { active -> if (active) vm.openDrawer() },
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .systemBarsPadding()
-                    .padding(top = 96.dp, bottom = 48.dp, end = 4.dp),
-            )
+            AnimatedVisibility(
+                visible = drawerOpen,
+                enter = fadeIn() + slideInVertically { it / 8 },
+                exit = fadeOut() + slideOutVertically { it / 8 },
+            ) {
+                Drawer(
+                    groups = groups,
+                    apps = apps,
+                    favoriteKeys = favoriteKeys,
+                    query = query,
+                    onQueryChange = vm::setQuery,
+                    listState = listState,
+                    actions = actions,
+                    onSwipeDownAtTop = vm::closeDrawer,
+                )
+            }
+
+            if (query.isEmpty()) {
+                AlphabetScroller(
+                    letters = groups.keys.toList(),
+                    onLetterSelected = { letter ->
+                        headerIndex[letter]?.let { scope.launch { listState.scrollToItem(it) } }
+                    },
+                    onActiveChange = { active -> if (active) vm.openDrawer() },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .systemBarsPadding()
+                        .padding(top = 96.dp, bottom = 48.dp, end = 4.dp),
+                )
+            }
         }
     }
 }
@@ -140,47 +156,83 @@ private fun HomePage(
     favorites: List<AppInfo>,
     actions: AppActions,
     onSwipeUp: () -> Unit,
+    theme: LauncherTheme,
+    onThemeChange: (LauncherTheme) -> Unit,
 ) {
+    val style = LocalLauncherStyle.current
     var dragTotal by remember { mutableFloatStateOf(0f) }
+    var menuOpen by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragStart = { dragTotal = 0f },
-                    onVerticalDrag = { _, dy ->
-                        dragTotal += dy
-                        if (dragTotal < -120f) {
-                            dragTotal = 0f
-                            onSwipeUp()
-                        }
+    Box(Modifier.fillMaxSize()) {
+        // Long-pressing empty space opens the theme menu, anchored near the top.
+        DropdownMenu(
+            expanded = menuOpen,
+            onDismissRequest = { menuOpen = false },
+            offset = DpOffset(28.dp, 160.dp),
+        ) {
+            Text(
+                text = "Theme",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            LauncherTheme.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label) },
+                    trailingIcon = { if (option == theme) Text("✓") },
+                    onClick = {
+                        menuOpen = false
+                        onThemeChange(option)
                     },
                 )
             }
-            .systemBarsPadding()
-            .padding(start = 28.dp, end = 56.dp),
-    ) {
-        ClockHeader(Modifier.padding(top = 48.dp))
-        Spacer(Modifier.weight(1f))
-        if (favorites.isEmpty()) {
-            Text(
-                text = "Long-press any app to add it here.\nSwipe up or slide the letters to see all apps.",
-                color = Color.White.copy(alpha = 0.7f),
-                style = TextStyle(fontSize = 15.sp, shadow = WallpaperTextShadow),
-            )
         }
-        favorites.forEachIndexed { i, app ->
-            AppRow(
-                app = app,
-                isFavorite = true,
-                actions = actions,
-                large = true,
-                canMoveUp = i > 0,
-                canMoveDown = i < favorites.lastIndex,
-            )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(onLongPress = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        menuOpen = true
+                    })
+                }
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onDragStart = { dragTotal = 0f },
+                        onVerticalDrag = { _, dy ->
+                            dragTotal += dy
+                            if (dragTotal < -120f) {
+                                dragTotal = 0f
+                                onSwipeUp()
+                            }
+                        },
+                    )
+                }
+                .systemBarsPadding()
+                .padding(start = 28.dp, end = 56.dp),
+        ) {
+            ClockHeader(Modifier.padding(top = 48.dp))
+            Spacer(Modifier.weight(1f))
+            if (favorites.isEmpty()) {
+                Text(
+                    text = "Long-press any app to add it here.\nSwipe up or slide the letters to see all apps.",
+                    color = style.textSecondary,
+                    style = TextStyle(fontSize = 15.sp, shadow = WallpaperTextShadow),
+                )
+            }
+            favorites.forEachIndexed { i, app ->
+                AppRow(
+                    app = app,
+                    isFavorite = true,
+                    actions = actions,
+                    large = true,
+                    canMoveUp = i > 0,
+                    canMoveDown = i < favorites.lastIndex,
+                )
+            }
+            Spacer(Modifier.height(56.dp))
         }
-        Spacer(Modifier.height(56.dp))
     }
 }
 
@@ -194,16 +246,17 @@ private fun ClockHeader(modifier: Modifier = Modifier) {
         }
     }
     val timePattern = if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"
+    val style = LocalLauncherStyle.current
 
     Column(modifier) {
         Text(
             text = now.format(DateTimeFormatter.ofPattern(timePattern)),
-            color = Color.White,
+            color = style.text,
             style = TextStyle(fontSize = 64.sp, fontWeight = FontWeight.Light, shadow = WallpaperTextShadow),
         )
         Text(
             text = now.format(DateTimeFormatter.ofPattern("EEEE, MMMM d")),
-            color = Color.White.copy(alpha = 0.85f),
+            color = style.textSecondary,
             style = TextStyle(fontSize = 17.sp, shadow = WallpaperTextShadow),
         )
     }
@@ -227,10 +280,12 @@ private fun Drawer(
             .sortedByDescending { it.label.startsWith(query.trim(), ignoreCase = true) }
     }
 
+    val style = LocalLauncherStyle.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.72f))
+            .background(style.drawerScrim)
             .statusBarsPadding()
             .imePadding(),
     ) {
@@ -245,8 +300,11 @@ private fun Drawer(
                 unfocusedContainerColor = Color.White.copy(alpha = 0.08f),
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
+                focusedTextColor = style.text,
+                unfocusedTextColor = style.text,
+                focusedPlaceholderColor = style.textSecondary,
+                unfocusedPlaceholderColor = style.textSecondary,
+                cursorColor = style.text,
             ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
             keyboardActions = KeyboardActions(onGo = { results.firstOrNull()?.let(actions.onLaunch) }),
@@ -298,7 +356,7 @@ private fun Drawer(
                     stickyHeader(key = "header-$letter") {
                         Text(
                             text = letter.toString(),
-                            color = Color.White.copy(alpha = 0.55f),
+                            color = style.textSecondary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(top = 14.dp, bottom = 4.dp),

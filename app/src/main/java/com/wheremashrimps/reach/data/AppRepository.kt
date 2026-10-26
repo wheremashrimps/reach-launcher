@@ -3,8 +3,13 @@ package com.wheremashrimps.reach.data
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.LauncherActivityInfo
 import android.content.pm.LauncherApps
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.AdaptiveIconDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.UserHandle
@@ -21,6 +26,8 @@ data class AppInfo(
     val component: ComponentName,
     val user: UserHandle,
     val icon: ImageBitmap,
+    /** The app's one-color icon glyph (Android 13+), or null if the app doesn't ship one. */
+    val monoIcon: ImageBitmap?,
 ) {
     val packageName: String get() = component.packageName
 
@@ -55,10 +62,24 @@ class AppRepository(private val context: Context) {
                         icon = info.getBadgedIcon(0)
                             .toBitmap(iconSizePx, iconSizePx)
                             .asImageBitmap(),
+                        monoIcon = loadMonoIcon(info),
                     )
                 }
         }
         return apps.sortedWith { a, b -> collator.compare(a.label, b.label) }
+    }
+
+    private fun loadMonoIcon(info: LauncherActivityInfo): ImageBitmap? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
+        val mono = (info.getIcon(0) as? AdaptiveIconDrawable)?.monochrome ?: return null
+        return runCatching {
+            val bitmap = Bitmap.createBitmap(iconSizePx, iconSizePx, Bitmap.Config.ARGB_8888)
+            // Adaptive icon layers extend 25% past the visible icon on every side.
+            val bleed = iconSizePx / 4
+            mono.setBounds(-bleed, -bleed, iconSizePx + bleed, iconSizePx + bleed)
+            mono.draw(Canvas(bitmap))
+            bitmap.asImageBitmap()
+        }.getOrNull()
     }
 
     /** Calls [onChange] whenever an app is installed, removed or updated. Returns an unregister function. */
