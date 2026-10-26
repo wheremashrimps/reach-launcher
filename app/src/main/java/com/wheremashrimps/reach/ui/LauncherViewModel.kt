@@ -2,6 +2,8 @@ package com.wheremashrimps.reach.ui
 
 import android.app.Application
 import android.net.Uri
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.AndroidViewModel
@@ -132,13 +134,22 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Uses the picked photo as the background, themes the launcher from its colors, and switches to it. */
     fun setPhoto(uri: Uri) {
+        Log.i(TAG, "Loading background photo from $uri")
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    backgroundStore.save(uri)?.let { it to BackgroundStore.extractColors(it) }
-                }.getOrNull()
-            } ?: return@launch
-            val (bitmap, colors) = result
+                runCatching { backgroundStore.save(uri)?.let { it to BackgroundStore.extractColors(it) } }
+            }
+            val loaded = result.getOrElse { error ->
+                Log.e(TAG, "Couldn't load background photo", error)
+                toast("Couldn't load that photo (${error.javaClass.simpleName}: ${error.message})")
+                return@launch
+            }
+            if (loaded == null) {
+                Log.e(TAG, "Background photo could not be decoded: $uri")
+                toast("Couldn't read that photo. Try downloading it to your phone first.")
+                return@launch
+            }
+            val (bitmap, colors) = loaded
             settings.photoColors = colors
             _photoColors.value = colors
             _photo.value = bitmap.asImageBitmap()
@@ -146,7 +157,15 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private fun toast(message: String) {
+        Toast.makeText(getApplication(), message, Toast.LENGTH_LONG).show()
+    }
+
     fun setQuery(text: String) = _query.update { text }
+
+    private companion object {
+        const val TAG = "Reach"
+    }
 
     override fun onCleared() {
         unregister()
