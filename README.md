@@ -15,6 +15,10 @@ Built with Kotlin and Jetpack Compose.
 
 ## Build and install
 
+**Easiest (phone only):** every push to `main` is built by GitHub Actions. On your phone, open the repo's **Releases → Latest build**, download `reach.apk`, and open it (allow installs from your browser when asked).
+
+**From source:**
+
 Requirements: Android Studio (Ladybug or newer) or the Android SDK with JDK 17+.
 
 ```sh
