@@ -3,9 +3,11 @@ package com.wheremashrimps.reach.ui
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import com.wheremashrimps.reach.data.PhotoColors
 
 enum class LauncherTheme(val label: String) {
     DUNES("Night dunes"),
+    PHOTO("Your photo"),
     WALLPAPER("Your wallpaper"),
 }
 
@@ -39,10 +41,20 @@ private val WallpaperStyle = LauncherStyle(
     iconBackground = Color.Transparent,
 )
 
-val LauncherTheme.style: LauncherStyle
-    get() = when (this) {
-        LauncherTheme.DUNES -> DunesStyle
-        LauncherTheme.WALLPAPER -> WallpaperStyle
-    }
+/** The style for this theme. [photoColors] are the colors taken from the background photo, if one is set. */
+fun LauncherTheme.style(photoColors: PhotoColors?): LauncherStyle = when (this) {
+    LauncherTheme.DUNES -> DunesStyle
+    LauncherTheme.WALLPAPER -> WallpaperStyle
+    LauncherTheme.PHOTO -> photoColors?.let {
+        LauncherStyle(
+            text = Color(it.text),
+            textSecondary = Color(it.textSecondary),
+            drawerScrim = Color(it.drawerScrim),
+            themedIcons = true,
+            iconTint = Color(it.iconTint),
+            iconBackground = Color(it.iconBackground),
+        )
+    } ?: DunesStyle
+}
 
 val LocalLauncherStyle = staticCompositionLocalOf { WallpaperStyle }

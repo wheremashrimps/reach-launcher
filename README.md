@@ -11,7 +11,8 @@ Built with Kotlin and Jetpack Compose.
 - **Search:** filter apps as you type; the keyboard's Go key opens the top result.
 - **Long-press menu:** add or remove a favorite, reorder favorites, App info, Uninstall.
 - **Work profile and Secure Folder apps** are included, with their badges.
-- **Night dunes theme** (default): a starry desert at night drawn by the launcher, with every app icon restyled in sand tones to match. Long-press empty space on the home page to switch to your own wallpaper instead.
+- **Night dunes theme** (default): a starry desert at night drawn by the launcher, with every app icon restyled in sand tones to match. 
+- **Your photo theme:** long-press empty space → **Choose photo…** and pick any image from your gallery. It becomes the background, and the icons, text and drawer are tinted with colors taken from it. The same menu switches between Night dunes, Your photo and your system wallpaper.
 - Uses Material You colors. Home closes the drawer, and Back never exits the launcher.
 
 ## Build and install

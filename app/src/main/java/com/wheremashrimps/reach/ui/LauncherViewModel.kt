@@ -1,11 +1,16 @@
 package com.wheremashrimps.reach.ui
 
 import android.app.Application
+import android.net.Uri
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.wheremashrimps.reach.data.AppInfo
 import com.wheremashrimps.reach.data.AppRepository
+import com.wheremashrimps.reach.data.BackgroundStore
 import com.wheremashrimps.reach.data.FavoritesStore
+import com.wheremashrimps.reach.data.PhotoColors
 import com.wheremashrimps.reach.data.SettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,6 +30,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     private val repository = AppRepository(app)
     private val favoritesStore = FavoritesStore(app)
     private val settings = SettingsStore(app)
+    private val backgroundStore = BackgroundStore(app)
 
     private val _apps = MutableStateFlow<List<AppInfo>>(emptyList())
     val apps: StateFlow<List<AppInfo>> = _apps.asStateFlow()
@@ -46,6 +52,12 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     private val _theme = MutableStateFlow(settings.theme)
     val theme: StateFlow<LauncherTheme> = _theme.asStateFlow()
 
+    private val _photo = MutableStateFlow<ImageBitmap?>(null)
+    val photo: StateFlow<ImageBitmap?> = _photo.asStateFlow()
+
+    private val _photoColors = MutableStateFlow(settings.photoColors)
+    val photoColors: StateFlow<PhotoColors?> = _photoColors.asStateFlow()
+
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
@@ -54,6 +66,9 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         reload()
+        viewModelScope.launch {
+            _photo.value = withContext(Dispatchers.IO) { backgroundStore.load() }?.asImageBitmap()
+        }
     }
 
     private fun reload() {
@@ -113,6 +128,22 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     fun setTheme(theme: LauncherTheme) {
         settings.theme = theme
         _theme.value = theme
+    }
+
+    /** Uses the picked photo as the background, themes the launcher from its colors, and switches to it. */
+    fun setPhoto(uri: Uri) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    backgroundStore.save(uri)?.let { it to BackgroundStore.extractColors(it) }
+                }.getOrNull()
+            } ?: return@launch
+            val (bitmap, colors) = result
+            settings.photoColors = colors
+            _photoColors.value = colors
+            _photo.value = bitmap.asImageBitmap()
+            setTheme(LauncherTheme.PHOTO)
+        }
     }
 
     fun setQuery(text: String) = _query.update { text }

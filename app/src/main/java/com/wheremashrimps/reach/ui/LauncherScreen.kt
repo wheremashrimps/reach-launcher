@@ -1,6 +1,15 @@
 package com.wheremashrimps.reach.ui
 
 import android.text.format.DateFormat
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.Image
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.net.Uri
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -81,6 +90,8 @@ fun LauncherScreen(vm: LauncherViewModel) {
     val drawerOpen by vm.drawerOpen.collectAsStateWithLifecycle()
     val query by vm.query.collectAsStateWithLifecycle()
     val theme by vm.theme.collectAsStateWithLifecycle()
+    val photo by vm.photo.collectAsStateWithLifecycle()
+    val photoColors by vm.photoColors.collectAsStateWithLifecycle()
 
     val groups = remember(apps) {
         apps.groupBy { it.letter }.toSortedMap(letterOrder)
@@ -103,9 +114,13 @@ fun LauncherScreen(vm: LauncherViewModel) {
         )
     }
 
-    CompositionLocalProvider(LocalLauncherStyle provides theme.style) {
+    CompositionLocalProvider(LocalLauncherStyle provides theme.style(photoColors)) {
         Box(Modifier.fillMaxSize()) {
-            if (theme == LauncherTheme.DUNES) DuneBackground(Modifier.fillMaxSize())
+            val currentPhoto = photo
+            when {
+                theme == LauncherTheme.PHOTO && currentPhoto != null -> PhotoBackground(currentPhoto)
+                theme != LauncherTheme.WALLPAPER -> DuneBackground(Modifier.fillMaxSize())
+            }
 
             AnimatedVisibility(visible = !drawerOpen, enter = fadeIn(), exit = fadeOut()) {
                 HomePage(
@@ -114,6 +129,8 @@ fun LauncherScreen(vm: LauncherViewModel) {
                     onSwipeUp = vm::openDrawer,
                     theme = theme,
                     onThemeChange = vm::setTheme,
+                    hasPhoto = photo != null,
+                    onPhotoPicked = vm::setPhoto,
                 )
             }
 
@@ -158,11 +175,17 @@ private fun HomePage(
     onSwipeUp: () -> Unit,
     theme: LauncherTheme,
     onThemeChange: (LauncherTheme) -> Unit,
+    hasPhoto: Boolean,
+    onPhotoPicked: (Uri) -> Unit,
 ) {
     val style = LocalLauncherStyle.current
     var dragTotal by remember { mutableFloatStateOf(0f) }
     var menuOpen by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let(onPhotoPicked)
+    }
+    fun launchPicker() = pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
 
     Box(Modifier.fillMaxSize()) {
         // Long-pressing empty space opens the theme menu, anchored near the top.
@@ -182,10 +205,19 @@ private fun HomePage(
                     trailingIcon = { if (option == theme) Text("✓") },
                     onClick = {
                         menuOpen = false
-                        onThemeChange(option)
+                        // "Your photo" with no photo yet goes straight to the picker.
+                        if (option == LauncherTheme.PHOTO && !hasPhoto) launchPicker() else onThemeChange(option)
                     },
                 )
             }
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("Choose photo…") },
+                onClick = {
+                    menuOpen = false
+                    launchPicker()
+                },
+            )
         }
 
         Column(
@@ -234,6 +266,22 @@ private fun HomePage(
             Spacer(Modifier.height(56.dp))
         }
     }
+}
+
+/** The chosen photo, cropped to fill the screen, darkened toward the bottom so the app list stays readable. */
+@Composable
+private fun PhotoBackground(photo: ImageBitmap) {
+    Image(
+        bitmap = photo,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.fillMaxSize(),
+    )
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(0.4f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.6f))),
+    )
 }
 
 @Composable
