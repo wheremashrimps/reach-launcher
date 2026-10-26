@@ -4,7 +4,10 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.ImageDecoder
 import android.net.Uri
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
 import java.io.File
@@ -27,20 +30,41 @@ class BackgroundStore(private val context: Context) {
 
     /** Copies the picked photo into app storage, scaled to about screen size. Returns it, or null if it can't be read. */
     fun save(uri: Uri): Bitmap? {
-        val resolver = context.contentResolver
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-
-        // Halve the size until the long edge is near the screen's, so a 50 MP photo doesn't fill memory.
-        val target = context.resources.displayMetrics.run { maxOf(widthPixels, heightPixels) }
-        var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= target) sample *= 2
-
-        val options = BitmapFactory.Options().apply { inSampleSize = sample }
-        val bitmap = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) } ?: return null
+        val bitmap = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) decodeModern(uri) else decodeLegacy(uri))
+            ?: return null
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 92, it) }
         return bitmap
+    }
+
+    private val screenLongEdge get() = context.resources.displayMetrics.run { maxOf(widthPixels, heightPixels) }
+
+    /** Halves the size until the long edge is near the screen's, so a 50 MP photo doesn't fill memory. */
+    private fun sampleSizeFor(width: Int, height: Int): Int {
+        var sample = 1
+        while (maxOf(width, height) / (sample * 2) >= screenLongEdge) sample *= 2
+        return sample
+    }
+
+    /** ImageDecoder reads HEIC and applies the photo's rotation, which BitmapFactory doesn't. */
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun decodeModern(uri: Uri): Bitmap {
+        val source = ImageDecoder.createSource(context.contentResolver, uri)
+        return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+            decoder.setTargetSampleSize(sampleSizeFor(info.size.width, info.size.height))
+            // Software pixels, so Palette can read them and the bitmap can be saved as JPEG.
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+        }
+    }
+
+    private fun decodeLegacy(uri: Uri): Bitmap? {
+        val resolver = context.contentResolver
+        // In bounds-only mode decodeStream always returns null; the size lands in the options.
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        val options = BitmapFactory.Options().apply { inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight) }
+        return resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
     }
 
     companion object {

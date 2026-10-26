@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
 
+# A newer push cancels the older build, so two runs never race to publish the release.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
