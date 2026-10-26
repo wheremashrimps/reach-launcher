@@ -158,7 +158,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun toast(message: String) {
-        Toast.makeText(getApplication(), message, Toast.LENGTH_LONG).show()
+        Toast.makeText(getApplication<Application>(), message, Toast.LENGTH_LONG).show()
     }
 
     fun setQuery(text: String) = _query.update { text }
