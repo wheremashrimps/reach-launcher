@@ -16,11 +16,24 @@ android {
         versionName = "0.1.0"
     }
 
+    // One fixed key for every build. Without it each CI run signs with a fresh random
+    // debug key, and Android refuses to install the new APK over the old one.
+    signingConfigs {
+        create("reach") {
+            storeFile = file("reach-debug.keystore")
+            storePassword = "android"
+            keyAlias = "reach"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("reach")
+        }
         release {
             isMinifyEnabled = false
-            // Signed with the debug key so a release APK installs without extra setup.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("reach")
         }
     }
 
